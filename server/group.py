@@ -1,7 +1,7 @@
 from . import exceptions
-from . import game
 from . import shared
 from . import utilities
+from .game import Game
 
 class Group:
 	def __init__(self, gid):
@@ -19,7 +19,7 @@ class Group:
 		self.members = []
 
 		self.in_game = False
-		self.game = game.Game(self)
+		self.game = Game(self)
 
 		shared.groups.append(self)
 
@@ -58,6 +58,7 @@ class Group:
 		addition = ''
 		skip = False
 
+		# Clean this section up
 		while not valid_name:
 			for p_member in self.members:
 				if p_member.name == (member.name + addition):

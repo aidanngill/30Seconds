@@ -1,7 +1,9 @@
 import random
 import time
 
+from . import exceptions
 from . import shared
+from . import utilities
 
 class Game:
 	def __init__(self, group):
@@ -17,16 +19,17 @@ class Game:
 		self.rounds = []
 		self.next_action = 0
 
+		self.custom_words = []
+		self.custom_words_only = False
+
+		self.round_count = 4
+
 		shared.games.append(self)
 
 	@property
 	def is_finished(self):
 		""" Whether or not the game is finished """
-		for score in self.scores:
-			if score >= 25:
-				return True
-
-		return False
+		return len(self.rounds) == len(self.teams) * self.round_count and self.rounds[-1].finished
 
 	def construct_teams(self):
 		""" Randomly generate the teams """
@@ -40,9 +43,43 @@ class Game:
 
 		return teams
 
-	def get_current_team(self):
+	def current_team(self):
 		""" Get the currently playing team """
 		return self.teams[len(self.rounds) % len(self.teams)]
+
+	def edit(self, round_count=None, wordlist=None):
+		""" Edit information about the game """
+		if round_count != None:
+			if not round_count.isdigit():
+				raise exceptions.ClientError('INVALID_TYPE')
+
+			parsed_round_count = int(round_count)
+			
+			if not 0 < parsed_round_count < 10:
+				raise exceptions.ClientError('INVALID_RANGE')
+
+			self.round_count = parsed_round_count
+
+		if wordlist != None:
+			if not isinstance(wordlist, list):
+				raise exceptions.ClientError('INVALID_TYPE')
+
+			new_words = []
+			for word in wordlist:
+				sanitized_word = utilities.sanitize_string(word)
+
+				if sanitized_word in {'', None}:
+					continue
+
+				if not 0 < len(sanitized_word) < 16:
+					continue
+
+				new_words.append(sanitized_word)
+
+			if not 0 < len(new_words) < 50:
+				raise exceptions.ClientError('INVALID_RANGE')
+
+			self.custom_words = new_words
 
 	async def start(self):
 		""" Start the game """
@@ -70,9 +107,11 @@ class Game:
 			'score': 0}
 		for team in self.teams]
 		
-		for game_round in self.rounds:
-			scores[self.teams.index(game_round.team)]['score'] += game_round.score
+		for g_round in self.rounds:
+			scores[self.teams.index(g_round.team)]['score'] += g_round.score
 
 		await self.group.send(1, 'GAME_END', {
 			'scores': scores
 		})
+
+		shared.games.remove(self)

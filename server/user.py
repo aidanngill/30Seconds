@@ -28,7 +28,7 @@ class User:
 		shared.users.append(self)
 
 	def as_safe_dict(self):
-		""" Returns safe information about the user that can be given to anyone """
+		""" Returns information about the user that can be given to anyone """
 		return {
 			'group': (self.group.gid if self.group else None),
 			'name': self.name,
@@ -43,7 +43,7 @@ class User:
 		:return User 	: the user's information
 		""" 
 		await websocket.send(json.dumps({
-			's': 1, 
+			's': 1,
 			'c': 'CONNECT_START'
 		}))
 
@@ -115,7 +115,7 @@ class User:
 	async def edit(self, name=None):
 		""" Edit a user's information, just name for now
 
-		:param name : new name for the user
+		:param name: new name for the user
 		"""
 		sanitized_name = utilities.sanitize_string(str(name))
 
@@ -153,7 +153,8 @@ class User:
 		if self.group.game.in_progress and len(self.group.game.rounds) > 0:
 			current_round = self.group.game.rounds[-1]
 			if current_round.answerer == self and not current_round.finished:
-				for index, word in enumerate(current_round.words):
+				for index, data in enumerate(current_round.words):
+					word = data['word']
 					if word.lower().strip() == sanitized_message.lower().strip():
 						await current_round.answer(word)
 			elif current_round.questioner == self:
@@ -177,6 +178,11 @@ class User:
 		action = received_json.get('c').upper()
 		data = received_json.get('d')
 
+		log.info('%s: %s' % (
+			self.session,
+			action
+		))
+
 		if not data and action not in constants.DATALESS:
 			raise exceptions.ClientError('NO_DATA')
 
@@ -186,18 +192,20 @@ class User:
 			await self.leave()
 		elif action == 'EDIT_USER':
 			await self.edit(name=data.get('name'))
+		elif action == 'EDIT_GAME':
+			if self.group != None:
+				self.group.game.edit(
+					round_count=data.get('round_count'),
+					wordlist=data.get('wordlist')
+				)
+			else:
+				raise exceptions.ClientError('NO_GROUP')
 		elif action == 'GAME_START':
 			await self.group.start_game()
 		elif action == 'CHAT_MESSAGE':
 			await self.message(data.get('message'))
 		elif action == 'CLOSE_CONNECTION':
 			self.active = 0
-
-		log.info('%s@%s: %s' % (
-			self.name,
-			self.group.gid if self.group else '',
-			action
-		))
 
 	async def send(self, success, code, data=None):
 		""" Send data to the websocket formatted
@@ -219,3 +227,5 @@ class User:
 				await self.process_data(await self.websocket.recv())
 			except exceptions.ClientError as e:
 				await self.send(0, str(e))
+			except KeyboardInterrupt:
+				await self.unregister()

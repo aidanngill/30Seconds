@@ -1,13 +1,13 @@
 import logging
 
-from . import user
+from .user import User
 
 log = logging.getLogger(__name__)
 
 async def server(websocket, path):
 	log.info('New connection from \'%s:%i\'' % (tuple(websocket.remote_address)[:2]))
 	
-	new_user = await user.User.register(websocket)
+	new_user = await User.register(websocket)
 	if not new_user:
 		return
 
